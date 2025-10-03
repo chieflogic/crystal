@@ -9,7 +9,13 @@ if (process.platform === 'linux') {
 }
 
 // Now import the rest of electron
-import { BrowserWindow, ipcMain, shell, dialog, IpcMainInvokeEvent } from 'electron';
+import {
+  BrowserWindow,
+  ipcMain,
+  shell,
+  dialog,
+  IpcMainInvokeEvent,
+} from 'electron';
 import * as path from 'path';
 import { TaskQueue } from './services/taskQueue';
 import { SessionManager } from './services/sessionManager';
@@ -55,7 +61,7 @@ function setAppTitle() {
       return title;
     }
   }
-  
+
   // Default title
   const title = 'Crystal';
   if (mainWindow) {
@@ -100,7 +106,7 @@ setupConsoleWrapper();
 const args = process.argv.slice(2);
 for (let i = 0; i < args.length; i++) {
   const arg = args[i];
-  
+
   // Support both --crystal-dir=/path and --crystal-dir /path formats
   if (arg.startsWith('--crystal-dir=')) {
     const dir = arg.substring('--crystal-dir='.length);
@@ -127,12 +133,14 @@ async function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
     },
-    ...(process.platform === 'darwin' ? {
-      titleBarStyle: 'hiddenInset',
-      trafficLightPosition: { x: 10, y: 10 }
-    } : {})
+    ...(process.platform === 'darwin'
+      ? {
+          titleBarStyle: 'hiddenInset',
+          trafficLightPosition: { x: 10, y: 10 },
+        }
+      : {}),
   });
 
   // Increase max listeners to prevent warning when many panels are active
@@ -142,13 +150,22 @@ async function createWindow() {
   if (isDevelopment) {
     await mainWindow.loadURL('http://localhost:4521');
     mainWindow.webContents.openDevTools();
-    
+
     // Enable IPC debugging in development
-    
+
     // Log all IPC calls in main process
     const originalHandle = ipcMain.handle;
-    ipcMain.handle = function(channel: string, listener: (event: IpcMainInvokeEvent, ...args: unknown[]) => Promise<unknown> | unknown) {
-      const wrappedListener = async (event: IpcMainInvokeEvent, ...args: unknown[]) => {
+    ipcMain.handle = function (
+      channel: string,
+      listener: (
+        event: IpcMainInvokeEvent,
+        ...args: unknown[]
+      ) => Promise<unknown> | unknown
+    ) {
+      const wrappedListener = async (
+        event: IpcMainInvokeEvent,
+        ...args: unknown[]
+      ) => {
         if (channel.startsWith('stravu:')) {
         }
         const result = await listener(event, ...args);
@@ -170,9 +187,12 @@ async function createWindow() {
       console.error('Failed to load index.html:', error);
       console.error('App path:', app.getAppPath());
       console.error('__dirname:', __dirname);
-      
+
       // Fallback: try relative path (for edge cases)
-      const fallbackPath = path.join(__dirname, '../../../../frontend/dist/index.html');
+      const fallbackPath = path.join(
+        __dirname,
+        '../../../../frontend/dist/index.html'
+      );
       console.error('Trying fallback path:', fallbackPath);
       try {
         await mainWindow.loadFile(fallbackPath);
@@ -195,48 +215,63 @@ async function createWindow() {
   });
 
   // Log any console messages from the renderer
-  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
-    // Skip messages that are already prefixed to avoid circular logging
-    if (message.includes('[Main Process]') || message.includes('[Renderer]')) {
-      return;
-    }
-    // Also skip Electron security warnings and other system messages
-    if (message.includes('Electron Security Warning') || sourceId.includes('electron/js2c')) {
-      return;
-    }
-    
-    // In development, log ALL console messages to help with debugging
-    if (isDevelopment) {
-      const levelNames = ['verbose', 'info', 'warning', 'error'];
-      const levelName = levelNames[level] || 'unknown';
-      const timestamp = new Date().toISOString();
-      const logMessage = `[${timestamp}] [FRONTEND ${levelName.toUpperCase()}] ${message}`;
-      
-      // Always log to main console
-      
-      // Also write to debug log file for Claude Code to read
-      const debugLogPath = path.join(process.cwd(), 'crystal-frontend-debug.log');
-      const logLine = `${logMessage} (${path.basename(sourceId)}:${line})\n`;
-      
-      try {
-        fs.appendFileSync(debugLogPath, logLine);
-      } catch (error) {
-        // Don't crash if we can't write to the log file
-        console.error('Failed to write to debug log:', error);
+  mainWindow.webContents.on(
+    'console-message',
+    (event, level, message, line, sourceId) => {
+      // Skip messages that are already prefixed to avoid circular logging
+      if (
+        message.includes('[Main Process]') ||
+        message.includes('[Renderer]')
+      ) {
+        return;
       }
-    } else {
-      // In production, only log errors and warnings from renderer
-      if (level >= 2) { // 2 = warning, 3 = error
+      // Also skip Electron security warnings and other system messages
+      if (
+        message.includes('Electron Security Warning') ||
+        sourceId.includes('electron/js2c')
+      ) {
+        return;
+      }
+
+      // In development, log ALL console messages to help with debugging
+      if (isDevelopment) {
+        const levelNames = ['verbose', 'info', 'warning', 'error'];
+        const levelName = levelNames[level] || 'unknown';
+        const timestamp = new Date().toISOString();
+        const logMessage = `[${timestamp}] [FRONTEND ${levelName.toUpperCase()}] ${message}`;
+
+        // Always log to main console
+
+        // Also write to debug log file for Claude Code to read
+        const debugLogPath = path.join(
+          process.cwd(),
+          'crystal-frontend-debug.log'
+        );
+        const logLine = `${logMessage} (${path.basename(sourceId)}:${line})\n`;
+
+        try {
+          fs.appendFileSync(debugLogPath, logLine);
+        } catch (error) {
+          // Don't crash if we can't write to the log file
+          console.error('Failed to write to debug log:', error);
+        }
+      } else {
+        // In production, only log errors and warnings from renderer
+        if (level >= 2) {
+          // 2 = warning, 3 = error
+        }
       }
     }
-  });
+  );
 
   // Override console methods to forward to renderer and logger
   console.log = (...args: unknown[]) => {
     // Format the message
-    const message = args.map(arg =>
-      typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
-    ).join(' ');
+    const message = args
+      .map((arg) =>
+        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+      )
+      .join(' ');
 
     // Write to logger if available
     if (logger) {
@@ -258,12 +293,17 @@ async function createWindow() {
 
   console.error = (...args: unknown[]) => {
     // Prevent infinite recursion by checking if we're already in an error handler
-    if ((console.error as typeof console.error & { __isHandlingError?: boolean }).__isHandlingError) {
+    if (
+      (console.error as typeof console.error & { __isHandlingError?: boolean })
+        .__isHandlingError
+    ) {
       return originalError.apply(console, args);
     }
-    
-    (console.error as typeof console.error & { __isHandlingError?: boolean }).__isHandlingError = true;
-    
+
+    (
+      console.error as typeof console.error & { __isHandlingError?: boolean }
+    ).__isHandlingError = true;
+
     try {
       // If logger is not initialized or we're in the logger itself, use original console
       if (!logger) {
@@ -271,23 +311,29 @@ async function createWindow() {
         return;
       }
 
-      const message = args.map(arg => {
-        if (typeof arg === 'object' && arg !== null) {
-          if (arg instanceof Error) {
-            return `Error: ${arg.message}\nStack: ${arg.stack}`;
+      const message = args
+        .map((arg) => {
+          if (typeof arg === 'object' && arg !== null) {
+            if (arg instanceof Error) {
+              return `Error: ${arg.message}\nStack: ${arg.stack}`;
+            }
+            try {
+              return JSON.stringify(arg, null, 2);
+            } catch (e) {
+              // Handle circular structure
+              return `[Object with circular structure: ${
+                arg.constructor?.name || 'Object'
+              }]`;
+            }
           }
-          try {
-            return JSON.stringify(arg, null, 2);
-          } catch (e) {
-            // Handle circular structure
-            return `[Object with circular structure: ${arg.constructor?.name || 'Object'}]`;
-          }
-        }
-        return String(arg);
-      }).join(' ');
+          return String(arg);
+        })
+        .join(' ');
 
       // Extract Error object if present
-      const errorObj = args.find(arg => arg instanceof Error) as Error | undefined;
+      const errorObj = args.find((arg) => arg instanceof Error) as
+        | Error
+        | undefined;
 
       // Use logger but with recursion protection
       logger.error(message, errorObj);
@@ -304,28 +350,36 @@ async function createWindow() {
       // If anything fails in the error handler, fall back to original
       originalError.apply(console, args);
     } finally {
-      (console.error as typeof console.error & { __isHandlingError?: boolean }).__isHandlingError = false;
+      (
+        console.error as typeof console.error & { __isHandlingError?: boolean }
+      ).__isHandlingError = false;
     }
   };
 
   console.warn = (...args: unknown[]) => {
-    const message = args.map(arg => {
-      if (typeof arg === 'object' && arg !== null) {
-        if (arg instanceof Error) {
-          return `Error: ${arg.message}\nStack: ${arg.stack}`;
+    const message = args
+      .map((arg) => {
+        if (typeof arg === 'object' && arg !== null) {
+          if (arg instanceof Error) {
+            return `Error: ${arg.message}\nStack: ${arg.stack}`;
+          }
+          try {
+            return JSON.stringify(arg, null, 2);
+          } catch (e) {
+            // Handle circular structure
+            return `[Object with circular structure: ${
+              arg.constructor?.name || 'Object'
+            }]`;
+          }
         }
-        try {
-          return JSON.stringify(arg, null, 2);
-        } catch (e) {
-          // Handle circular structure
-          return `[Object with circular structure: ${arg.constructor?.name || 'Object'}]`;
-        }
-      }
-      return String(arg);
-    }).join(' ');
+        return String(arg);
+      })
+      .join(' ');
 
     // Extract Error object if present for warnings too
-    const errorObj = args.find(arg => arg instanceof Error) as Error | undefined;
+    const errorObj = args.find((arg) => arg instanceof Error) as
+      | Error
+      | undefined;
 
     if (logger) {
       logger.warn(message, errorObj);
@@ -344,20 +398,24 @@ async function createWindow() {
   };
 
   console.info = (...args: unknown[]) => {
-    const message = args.map(arg => {
-      if (typeof arg === 'object' && arg !== null) {
-        if (arg instanceof Error) {
-          return `Error: ${arg.message}\nStack: ${arg.stack}`;
+    const message = args
+      .map((arg) => {
+        if (typeof arg === 'object' && arg !== null) {
+          if (arg instanceof Error) {
+            return `Error: ${arg.message}\nStack: ${arg.stack}`;
+          }
+          try {
+            return JSON.stringify(arg, null, 2);
+          } catch (e) {
+            // Handle circular structure
+            return `[Object with circular structure: ${
+              arg.constructor?.name || 'Object'
+            }]`;
+          }
         }
-        try {
-          return JSON.stringify(arg, null, 2);
-        } catch (e) {
-          // Handle circular structure
-          return `[Object with circular structure: ${arg.constructor?.name || 'Object'}]`;
-        }
-      }
-      return String(arg);
-    }).join(' ');
+        return String(arg);
+      })
+      .join(' ');
 
     if (logger) {
       logger.info(message);
@@ -413,18 +471,20 @@ async function initializeServices() {
   // Initialize logger early so it can capture all logs
   logger = new Logger(configManager);
   console.log('[Main] Logger initialized with file logging to ~/.crystal/logs');
-  
+
   // Initialize commitManager with configManager
   initializeCommitManager(configManager, logger);
 
   // Use the same database path as the original backend
   const dbPath = configManager.getDatabasePath();
   databaseService = new DatabaseService(dbPath);
+  // Note: initialize() is already called in services/database.ts singleton
+  // but we need to call it again for this separate instance
   databaseService.initialize();
 
   sessionManager = new SessionManager(databaseService);
   sessionManager.initializeFromDatabase();
-  
+
   archiveProgressManager = new ArchiveProgressManager();
 
   // Start permission IPC server
@@ -455,20 +515,25 @@ async function initializeServices() {
 
   // Initialize CLI manager factory
   cliManagerFactory = CliManagerFactory.getInstance(logger, configManager);
-  
+
   // Create default CLI manager (Claude) with permission IPC path
   defaultCliManager = await cliManagerFactory.createManager('claude', {
     sessionManager,
     logger,
     configManager,
-    additionalOptions: { permissionIpcPath }
+    additionalOptions: { permissionIpcPath },
   });
   gitDiffManager = new GitDiffManager();
-  gitStatusManager = new GitStatusManager(sessionManager, worktreeManager, gitDiffManager, logger);
+  gitStatusManager = new GitStatusManager(
+    sessionManager,
+    worktreeManager,
+    gitDiffManager,
+    logger
+  );
   executionTracker = new ExecutionTracker(sessionManager, gitDiffManager);
   worktreeNameGenerator = new WorktreeNameGenerator(configManager);
   runCommandManager = new RunCommandManager(databaseService);
-  
+
   // Initialize version checker
   versionChecker = new VersionChecker(configManager, logger);
   stravuAuthManager = new StravuAuthManager(logger);
@@ -481,7 +546,7 @@ async function initializeServices() {
     gitDiffManager,
     executionTracker,
     worktreeNameGenerator,
-    getMainWindow: () => mainWindow
+    getMainWindow: () => mainWindow,
   });
 
   const services: AppServices = {
@@ -510,30 +575,33 @@ async function initializeServices() {
   registerIpcHandlers(services);
   // Then set up event listeners that may rely on initialized managers
   setupEventListeners(services, () => mainWindow);
-  
+
   // Register console logging IPC handler for development
   if (isDevelopment) {
     ipcMain.handle('console:log', (event, logData) => {
       const { level, args, timestamp, source } = logData;
       const message = args.join(' ');
       const logLine = `[${timestamp}] [${source.toUpperCase()} ${level.toUpperCase()}] ${message}\n`;
-      
+
       // Write to debug log file
-      const debugLogPath = path.join(process.cwd(), 'crystal-frontend-debug.log');
+      const debugLogPath = path.join(
+        process.cwd(),
+        'crystal-frontend-debug.log'
+      );
       try {
         fs.appendFileSync(debugLogPath, logLine);
       } catch (error) {
         console.error('Failed to write console log to debug file:', error);
       }
-      
+
       // Also log to main console with prefix
       console.log(`[Frontend ${level}] ${message}`);
     });
   }
-  
+
   // Start periodic version checking (only if enabled in settings)
   versionChecker.startPeriodicCheck();
-  
+
   // Start git status polling
   gitStatusManager.startPolling();
 }
@@ -544,10 +612,10 @@ app.whenReady().then(async () => {
   console.log('[Main] Services initialized, creating window...');
   await createWindow();
   console.log('[Main] Window created successfully');
-  
+
   // Configure auto-updater
   setupAutoUpdater(() => mainWindow);
-  
+
   // Check for updates after window is created
   setTimeout(async () => {
     console.log('[Main] Performing startup version check...');
@@ -572,29 +640,35 @@ app.on('before-quit', async (event) => {
   // Check if there are active archive tasks
   if (archiveProgressManager && archiveProgressManager.hasActiveTasks()) {
     event.preventDefault();
-    
+
     console.log('[Main] Archive tasks in progress, showing warning dialog...');
     const activeCount = archiveProgressManager.getActiveTaskCount();
-    const choice = mainWindow 
+    const choice = mainWindow
       ? dialog.showMessageBoxSync(mainWindow, {
           type: 'warning',
           title: 'Archive Tasks In Progress',
-          message: `Crystal is removing ${activeCount} worktree${activeCount > 1 ? 's' : ''} in the background.`,
-          detail: 'Git worktree removal can take time, especially for large repositories with many files. If you quit now, the worktree directories may not be fully cleaned up and you may need to remove them manually.\n\nDo you want to quit anyway?',
+          message: `Crystal is removing ${activeCount} worktree${
+            activeCount > 1 ? 's' : ''
+          } in the background.`,
+          detail:
+            'Git worktree removal can take time, especially for large repositories with many files. If you quit now, the worktree directories may not be fully cleaned up and you may need to remove them manually.\n\nDo you want to quit anyway?',
           buttons: ['Wait', 'Quit Anyway'],
           defaultId: 0,
-          cancelId: 0
+          cancelId: 0,
         })
       : dialog.showMessageBoxSync({
           type: 'warning',
           title: 'Archive Tasks In Progress',
-          message: `Crystal is removing ${activeCount} worktree${activeCount > 1 ? 's' : ''} in the background.`,
-          detail: 'Git worktree removal can take time, especially for large repositories with many files. If you quit now, the worktree directories may not be fully cleaned up and you may need to remove them manually.\n\nDo you want to quit anyway?',
+          message: `Crystal is removing ${activeCount} worktree${
+            activeCount > 1 ? 's' : ''
+          } in the background.`,
+          detail:
+            'Git worktree removal can take time, especially for large repositories with many files. If you quit now, the worktree directories may not be fully cleaned up and you may need to remove them manually.\n\nDo you want to quit anyway?',
           buttons: ['Wait', 'Quit Anyway'],
           defaultId: 0,
-          cancelId: 0
+          cancelId: 0,
         });
-    
+
     if (choice === 1) {
       // User chose to quit anyway
       archiveProgressManager.clearAll();
@@ -603,10 +677,12 @@ app.on('before-quit', async (event) => {
     // Otherwise, the quit is cancelled and app continues
     return;
   }
-  
+
   // Cleanup all sessions and terminate child processes
   if (sessionManager) {
-    console.log('[Main] Cleaning up sessions and terminating child processes...');
+    console.log(
+      '[Main] Cleaning up sessions and terminating child processes...'
+    );
     await sessionManager.cleanup();
     console.log('[Main] Session cleanup complete');
   }
@@ -617,7 +693,7 @@ app.on('before-quit', async (event) => {
     await runCommandManager.stopAllRunCommands();
     console.log('[Main] Run commands stopped');
   }
-  
+
   // Stop git status polling
   if (gitStatusManager) {
     console.log('[Main] Stopping git status polling...');
@@ -627,7 +703,9 @@ app.on('before-quit', async (event) => {
 
   // Shutdown CLI manager factory and all CLI processes
   if (cliManagerFactory) {
-    console.log('[Main] Shutting down CLI manager factory and all CLI processes...');
+    console.log(
+      '[Main] Shutting down CLI manager factory and all CLI processes...'
+    );
     await cliManagerFactory.shutdown();
     console.log('[Main] CLI manager factory shutdown complete');
   }
@@ -643,7 +721,7 @@ app.on('before-quit', async (event) => {
     await permissionIpcServer.stop();
     console.log('[Main] Permission IPC server stopped');
   }
-  
+
   // Stop version checker
   if (versionChecker) {
     versionChecker.stopPeriodicCheck();
