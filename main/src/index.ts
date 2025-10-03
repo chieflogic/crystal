@@ -149,7 +149,10 @@ async function createWindow() {
 
   if (isDevelopment) {
     await mainWindow.loadURL('http://localhost:4521');
-    mainWindow.webContents.openDevTools();
+    // Only open dev tools if not explicitly disabled
+    if (!process.env.DISABLE_DEVTOOLS) {
+      mainWindow.webContents.openDevTools();
+    }
 
     // Enable IPC debugging in development
 
@@ -160,7 +163,7 @@ async function createWindow() {
       listener: (
         event: IpcMainInvokeEvent,
         ...args: unknown[]
-      ) => Promise<unknown> | unknown
+      ) => Promise<unknown> | unknown,
     ) {
       const wrappedListener = async (
         event: IpcMainInvokeEvent,
@@ -191,7 +194,7 @@ async function createWindow() {
       // Fallback: try relative path (for edge cases)
       const fallbackPath = path.join(
         __dirname,
-        '../../../../frontend/dist/index.html'
+        '../../../../frontend/dist/index.html',
       );
       console.error('Trying fallback path:', fallbackPath);
       try {
@@ -245,7 +248,7 @@ async function createWindow() {
         // Also write to debug log file for Claude Code to read
         const debugLogPath = path.join(
           process.cwd(),
-          'crystal-frontend-debug.log'
+          'crystal-frontend-debug.log',
         );
         const logLine = `${logMessage} (${path.basename(sourceId)}:${line})\n`;
 
@@ -261,7 +264,7 @@ async function createWindow() {
           // 2 = warning, 3 = error
         }
       }
-    }
+    },
   );
 
   // Override console methods to forward to renderer and logger
@@ -269,7 +272,7 @@ async function createWindow() {
     // Format the message
     const message = args
       .map((arg) =>
-        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg),
       )
       .join(' ');
 
@@ -528,7 +531,7 @@ async function initializeServices() {
     sessionManager,
     worktreeManager,
     gitDiffManager,
-    logger
+    logger,
   );
   executionTracker = new ExecutionTracker(sessionManager, gitDiffManager);
   worktreeNameGenerator = new WorktreeNameGenerator(configManager);
@@ -586,7 +589,7 @@ async function initializeServices() {
       // Write to debug log file
       const debugLogPath = path.join(
         process.cwd(),
-        'crystal-frontend-debug.log'
+        'crystal-frontend-debug.log',
       );
       try {
         fs.appendFileSync(debugLogPath, logLine);
@@ -681,7 +684,7 @@ app.on('before-quit', async (event) => {
   // Cleanup all sessions and terminate child processes
   if (sessionManager) {
     console.log(
-      '[Main] Cleaning up sessions and terminating child processes...'
+      '[Main] Cleaning up sessions and terminating child processes...',
     );
     await sessionManager.cleanup();
     console.log('[Main] Session cleanup complete');
@@ -704,7 +707,7 @@ app.on('before-quit', async (event) => {
   // Shutdown CLI manager factory and all CLI processes
   if (cliManagerFactory) {
     console.log(
-      '[Main] Shutting down CLI manager factory and all CLI processes...'
+      '[Main] Shutting down CLI manager factory and all CLI processes...',
     );
     await cliManagerFactory.shutdown();
     console.log('[Main] CLI manager factory shutdown complete');
