@@ -8,6 +8,7 @@ import { usePanelStore } from '../stores/panelStore';
 import { panelApi } from '../services/panelApi';
 import { ToolPanel, ToolPanelType } from '../../../shared/types/panels';
 import { SessionProvider } from '../contexts/SessionContext';
+import { isSetupNeeded } from '../utils/setupTasks';
 
 interface ProjectViewProps {
   projectId: number;
@@ -39,6 +40,19 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
     addPanel,
     removePanel,
   } = usePanelStore();
+
+  // Check if setup tasks are needed using shared utility
+  const checkIfSetupTasksNeeded = useCallback(async (): Promise<boolean> => {
+    try {
+      const setupNeeded = await isSetupNeeded(projectId);
+      console.log('[ProjectView] Setup tasks check - needed:', setupNeeded);
+      return setupNeeded;
+    } catch (error) {
+      console.error('[ProjectView] Error checking setup tasks:', error);
+      // If we can't check, assume setup is needed to be safe
+      return true;
+    }
+  }, [projectId]);
 
   // Load panels when main repo session changes and ensure dashboard panel exists
   useEffect(() => {
@@ -73,8 +87,14 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
             panelsCreated = true;
           }
 
-          if (!setupTasksPanel) {
-            console.log('[ProjectView] Creating setup-tasks panel for project');
+          // Check if setup tasks are needed
+          const setupNeeded = await checkIfSetupTasksNeeded();
+
+          if (!setupTasksPanel && setupNeeded) {
+            // No panel exists and setup is needed - create it
+            console.log(
+              '[ProjectView] Creating setup-tasks panel for project (setup incomplete)',
+            );
             await panelApi.createPanel({
               sessionId: mainRepoSessionId,
               type: 'setup-tasks',
@@ -82,6 +102,17 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
               metadata: { permanent: true },
             });
             panelsCreated = true;
+          } else if (setupTasksPanel && !setupNeeded) {
+            // Panel exists but setup is complete - auto-close it
+            console.log(
+              '[ProjectView] Auto-closing setup-tasks panel (all tasks complete)',
+            );
+            await panelApi.deletePanel(setupTasksPanel.id);
+            panelsCreated = true; // Trigger panel reload
+          } else if (!setupTasksPanel && !setupNeeded) {
+            console.log(
+              '[ProjectView] Skipping setup-tasks panel creation (all tasks complete)',
+            );
           }
 
           // Reload panels if any were created
